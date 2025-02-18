@@ -1,0 +1,2 @@
+# adj_especiales
+Desarrollos implementaciones Adj_Especiales
