@@ -1,0 +1,57 @@
+# Función para generar la descripción de un lindero
+def generar_lindero(lindero_id, coordenadas, direccion, tipo_linea, distancia, colindante, parcela, num_predial):
+    puntos = coordenadas.split(";")  # Separar los puntos intermedios por ";"
+
+    # Extraer el punto inicial y final
+    punto_inicio = puntos[0].strip()
+    punto_final = puntos[-1].strip()
+
+    # Construcción de la redacción del lindero
+    descripcion = (
+        f"LINDERO {lindero_id}: Inicia en el punto {punto_inicio.split(':')[0]} con coordenadas "
+        f"N={punto_inicio.split(':')[1]}m, E={punto_inicio.split(':')[2]}m en línea {tipo_linea.lower()} y en sentido "
+        f"{direccion.lower()} "
+    )
+
+    # Si hay puntos intermedios, agregarlos en la descripción
+    if len(puntos) > 2:
+        descripcion += "pasando por los puntos y coordenadas "
+        intermedios = []
+        for p in puntos[1:-1]:
+            num_punto, norte, este = p.strip().split(":")
+            intermedios.append(f"{num_punto}: N={norte}m, E={este}m")
+        descripcion += "; ".join(intermedios) + ", "
+
+    # Agregar el destino final y colindancias
+    descripcion += (
+        f"con una distancia acumulada de {distancia}m hasta el punto {punto_final.split(':')[0]} con coordenadas "
+        f"N={punto_final.split(':')[1]}m, E={punto_final.split(':')[2]}m, colindando con {colindante} PARCELA {parcela} "
+        f"con número predial {num_predial}.\n"
+    )
+
+    return descripcion
+
+# Número de linderos
+num_linderos = int(input("Ingrese el número de linderos: "))
+
+# Lista para almacenar los resultados
+redaccion_linderos = []
+
+for i in range(1, num_linderos + 1):
+    print(f"\nIngrese los datos del LINDERO {i}:")
+    coordenadas = input("Puntos en el formato (num:Norte:Este) separados por ';': ")
+    direccion = input("Dirección (norte, sur, este, oeste): ")
+    tipo_linea = input("Tipo de línea (recta, quebrada, curva): ")
+    distancia = input("Distancia total en metros: ")
+    colindante = input("Nombre del colindante: ")
+    parcela = input("Número de parcela del colindante: ")
+    num_predial = input("Número predial (xxx si no tiene): ")
+
+    # Generar la redacción
+    texto_lindero = generar_lindero(i, coordenadas, direccion, tipo_linea, distancia, colindante, parcela, num_predial)
+    redaccion_linderos.append(texto_lindero)
+
+# Mostrar toda la descripción de los linderos en el notebook
+print("\nREDACCIÓN TÉCNICA DE LINDEROS:\n")
+for lindero in redaccion_linderos:
+    print(lindero)
