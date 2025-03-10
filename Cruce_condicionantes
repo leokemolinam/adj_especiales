@@ -1,0 +1,81 @@
+import arcpy
+import os
+import csv
+
+# Rutas de la Geodatabase (GDB) y la capa de predios
+gdb_path = r"D:\2.0 ANT - DAT\INFORMACION GEOGRAFICA\CRUCES_MUNICIPIOS_08012025_DAT.gdb"
+predios_layer = r"D:\2.0 ANT - DAT\SHAPE GARZON\shape_prueba\5predios.shp"
+
+# Comprobar la existencia del shapefile antes de continuar
+if not arcpy.Exists(predios_layer):
+    print("ERROR: No se encontró el archivo shapefile con la ruta: {}".format(predios_layer))
+    raise SystemExit
+
+# Ruta de salida del archivo CSV (para las condicionantes)
+csv_output_path = r"C:\Temp\reporte_interseccion_condicionantes.csv"
+
+# Eliminar el archivo CSV si ya existe
+if os.path.exists(csv_output_path):
+    try:
+        os.remove(csv_output_path)
+        print("Archivo existente eliminado: {}".format(csv_output_path))
+    except Exception as e:
+        print("No se pudo eliminar el archivo existente. Error: {}".format(e))
+        raise SystemExit
+
+# Listas para almacenar los resultados
+resultados_csv = [["Feature Dataset", "Capa de Condicionante", "Resultado"]]
+
+# Establecer el entorno de trabajo en el Feature Dataset de Condicionantes
+feature_dataset = "CONDICIONANTES_COMPRAS_2025"
+arcpy.env.workspace = os.path.join(gdb_path, feature_dataset)
+
+# Obtener todas las capas dentro del Feature Dataset de Condicionantes
+capas = arcpy.ListFeatureClasses()
+
+# Recorrer cada capa de condicionantes y comprobar la intersección espacial con la capa de predios
+for index, capa in enumerate(capas):
+    capa_ruta = os.path.join(arcpy.env.workspace, capa)
+    output_intersect = "in_memory/intersect_output_{}".format(index)  # Nombre dinámico sin f-strings
+
+    if not arcpy.Exists(capa_ruta):
+        print("ERROR: La capa no existe o no es compatible: {}".format(capa_ruta))
+        resultados_csv.append([feature_dataset, capa, "No encontrada o no compatible"])
+        continue
+    
+    try:
+        # Eliminar cualquier resultado temporal existente en la memoria antes de usarlo
+        if arcpy.Exists(output_intersect):
+            arcpy.Delete_management(output_intersect)
+            print("Eliminando dataset temporal: {}".format(output_intersect))
+        
+        # Realizar la intersección espacial con un nombre dinámico
+        resultado_interseccion = arcpy.analysis.Intersect([predios_layer, capa_ruta], output_intersect)
+
+        # Contar las entidades resultantes de la intersección
+        conteo = int(arcpy.GetCount_management(resultado_interseccion)[0])
+
+        if conteo > 0:
+            resultados_csv.append([feature_dataset, capa, "Cruza"])
+        else:
+            resultados_csv.append([feature_dataset, capa, "No Cruza"])
+
+    except Exception as e:
+        print("Error al procesar la capa {}: {}".format(capa, e))
+        resultados_csv.append([feature_dataset, capa, "Error: {}".format(str(e))])
+    
+    finally:
+        # Intentar siempre limpiar la memoria temporal, incluso si hay errores
+        if arcpy.Exists(output_intersect):
+            arcpy.Delete_management(output_intersect)
+            print("Memoria temporal limpia: {}".format(output_intersect))
+
+# Escribir los resultados en un archivo CSV (modo binario para Python 2.7)
+try:
+    with open(csv_output_path, mode='wb') as file:
+        writer = csv.writer(file)
+        writer.writerows(resultados_csv)
+
+    print("\nEl reporte ha sido guardado en: {}".format(csv_output_path))
+except Exception as e:
+    print("Error al guardar el archivo CSV: {}".format(e))
