@@ -1,0 +1,86 @@
+import arcpy
+import os
+import csv
+
+# Rutas de la Geodatabase y la capa de predios
+gdb_path = r"D:\2.0 ANT - DAT\INFORMACION GEOGRAFICA\CRUCES_MUNICIPIOS_08012025_DAT.gdb"
+predios_layer = r"D:\2.0 ANT - DAT\SHAPE GARZON\shape_prueba\5predios.shp"
+
+# Verificar existencia del shapefile
+if not arcpy.Exists(predios_layer):
+    print("ERROR: No se encontró el archivo shapefile con la ruta: {}".format(predios_layer))
+    raise SystemExit
+
+# Ruta del archivo de salida
+csv_output_path = r"C:\Temp\reporte_interseccion_condicionantes.csv"
+
+# Eliminar archivo anterior si existe
+if os.path.exists(csv_output_path):
+    try:
+        os.remove(csv_output_path)
+        print("Archivo existente eliminado: {}".format(csv_output_path))
+    except Exception as e:
+        print("No se pudo eliminar el archivo existente. Error: {}".format(e))
+        raise SystemExit
+
+# Cabecera del CSV
+resultados_csv = [["Feature Dataset", "Capa de Condicionante", "Resultado", "Área Afectada (m2)", "Porcentaje Afectado (%)"]]
+
+# Establecer entorno de trabajo
+feature_dataset = "CONDICIONANTES_COMPRAS_2025"
+arcpy.env.workspace = os.path.join(gdb_path, feature_dataset)
+capas = arcpy.ListFeatureClasses()
+
+# Calcular área total de los predios
+area_total = sum([row[0] for row in arcpy.da.SearchCursor(predios_layer, ["SHAPE@AREA"])])
+print("Área total de predios: {:.2f} m²".format(area_total))
+
+# Recorrer cada capa de condicionantes
+for index, capa in enumerate(capas):
+    capa_ruta = os.path.join(arcpy.env.workspace, capa)
+    output_intersect = "in_memory/intersect_output_{}".format(index)
+
+    if not arcpy.Exists(capa_ruta):
+        print("ERROR: La capa no existe: {}".format(capa_ruta))
+        resultados_csv.append([feature_dataset, capa, "No encontrada", "", ""])
+        continue
+
+    try:
+        if arcpy.Exists(output_intersect):
+            arcpy.Delete_management(output_intersect)
+
+        arcpy.Intersect_analysis([predios_layer, capa_ruta], output_intersect)
+
+        conteo = int(arcpy.GetCount_management(output_intersect)[0])
+
+        if conteo > 0:
+            area_afectada = sum([row[0] for row in arcpy.da.SearchCursor(output_intersect, ["SHAPE@AREA"])])
+            porcentaje = (area_afectada / area_total) * 100 if area_total > 0 else 0
+
+            resultados_csv.append([
+                feature_dataset,
+                capa,
+                "Cruza",
+                round(area_afectada, 2),
+                round(porcentaje, 2)
+            ])
+        else:
+            resultados_csv.append([feature_dataset, capa, "No Cruza", 0, 0])
+
+    except Exception as e:
+        print("Error al procesar la capa {}: {}".format(capa, e))
+        resultados_csv.append([feature_dataset, capa, "Error: {}".format(str(e)), "", ""])
+
+    finally:
+        if arcpy.Exists(output_intersect):
+            arcpy.Delete_management(output_intersect)
+
+# Escribir los resultados en un archivo CSV (compatible con Python 2)
+try:
+    with open(csv_output_path, 'wb') as file:  # 'wb' asegura compatibilidad
+        writer = csv.writer(file)
+        writer.writerows(resultados_csv)
+
+    print("\n✅ Reporte guardado en: {}".format(csv_output_path))
+except Exception as e:
+    print("❌ Error al guardar el archivo CSV: {}".format(e))
